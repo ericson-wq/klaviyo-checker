@@ -49,27 +49,52 @@ def normalize_domain(raw: str) -> str:
     return raw
 
 
-def detect_klaviyo(html: str) -> bool:
-    """Check HTML for Klaviyo-specific signals."""
+def detect_klaviyo(html: str) -> dict:
+    """Check HTML for Klaviyo-specific signals. Returns dict with result and matched signals."""
     soup = BeautifulSoup(html, "html.parser")
+    signals = []
 
-    # 1 & 2: Script src containing klaviyo
+    # 1: Script src containing static.klaviyo.com
     for script in soup.find_all("script", src=True):
-        src = script["src"].lower()
-        if "static.klaviyo.com" in src or "klaviyo" in src:
-            return True
+        src = script["src"]
+        if "static.klaviyo.com" in src.lower():
+            signals.append({"type": "klaviyo_cdn_script", "detail": src})
 
-    # 3 & 4: Inline scripts referencing _learnq or a.klaviyo.com
+    # 2: Script src containing klaviyo (other CDN variants)
+    for script in soup.find_all("script", src=True):
+        src = script["src"]
+        if "klaviyo" in src.lower() and "static.klaviyo.com" not in src.lower():
+            signals.append({"type": "klaviyo_script", "detail": src})
+
+    # 3: _learnq variable in inline scripts
     for script in soup.find_all("script", src=False):
         text = script.string or ""
-        if "_learnq" in text or "a.klaviyo.com" in text:
-            return True
+        if "_learnq" in text:
+            # Extract a short snippet around the match
+            idx = text.index("_learnq")
+            start = max(0, idx - 20)
+            end = min(len(text), idx + 40)
+            snippet = text[start:end].strip().replace("\n", " ")
+            signals.append({"type": "learnq_variable", "detail": snippet})
+            break
+
+    # 4: References to a.klaviyo.com in inline scripts
+    for script in soup.find_all("script", src=False):
+        text = script.string or ""
+        if "a.klaviyo.com" in text:
+            signals.append({"type": "klaviyo_api_endpoint", "detail": "a.klaviyo.com"})
+            break
 
     # 5: .klaviyo-form class in DOM
-    if soup.find(class_=re.compile(r"klaviyo-form")):
-        return True
+    form_el = soup.find(class_=re.compile(r"klaviyo-form"))
+    if form_el:
+        classes = " ".join(form_el.get("class", []))
+        signals.append({"type": "klaviyo_form_class", "detail": classes})
 
-    return False
+    return {
+        "detected": len(signals) > 0,
+        "signals": signals,
+    }
 
 
 def _json_response(handler, status: int, body: dict):
@@ -127,12 +152,14 @@ class handler(BaseHTTPRequestHandler):
                 return _json_response(self, 200, {
                     "domain": domain,
                     "uses_klaviyo": False,
+                    "signals_matched": [],
                 })
 
-            uses_klaviyo = detect_klaviyo(resp.text)
+            result = detect_klaviyo(resp.text)
             return _json_response(self, 200, {
                 "domain": domain,
-                "uses_klaviyo": uses_klaviyo,
+                "uses_klaviyo": result["detected"],
+                "signals_matched": result["signals"],
             })
 
         except Exception:

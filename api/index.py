@@ -51,6 +51,13 @@ HTML = """<!DOCTYPE html>
   .result-badge.err { background: #fff3cd; color: #856404; }
   .result-json { background: #1a1a2e; color: #e9ecef; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.85rem; font-family: monospace; white-space: pre; overflow-x: auto; margin: 0; }
   .result-meta { font-size: 0.8rem; color: #6c757d; margin-top: 0.4rem; }
+  .result-signals { margin-top: 0.5rem; display: none; }
+  .result-signals.visible { display: block; }
+  .result-signals h4 { font-size: 0.85rem; color: #495057; margin-bottom: 0.35rem; }
+  .signal-item { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.35rem 0; border-bottom: 1px solid #f1f3f5; font-size: 0.85rem; }
+  .signal-item:last-child { border-bottom: none; }
+  .signal-type { background: #e8e5ff; color: #4f46e5; padding: 0.1em 0.4em; border-radius: 4px; font-family: monospace; font-size: 0.8rem; white-space: nowrap; }
+  .signal-detail { color: #495057; font-family: monospace; font-size: 0.8rem; word-break: break-all; }
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 0.3rem; }
   @keyframes spin { to { transform: rotate(360deg); } }
   footer { margin-top: 3rem; color: #6c757d; font-size: 0.85rem; text-align: center; }
@@ -77,10 +84,27 @@ HTML = """<!DOCTYPE html>
 <h2>Response</h2>
 <p>All responses return JSON. The <code>uses_klaviyo</code> field is always present.</p>
 
-<h3><span class="tag tag-green">200</span> Success</h3>
+<h3><span class="tag tag-green">200</span> Success (Klaviyo detected)</h3>
 <pre><code>{
-  "domain": "gymshark.com",
-  "uses_klaviyo": true
+  "domain": "colourpop.com",
+  "uses_klaviyo": true,
+  "signals_matched": [
+    {
+      "type": "klaviyo_cdn_script",
+      "detail": "https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=XYZ"
+    },
+    {
+      "type": "learnq_variable",
+      "detail": "var _learnq = _learnq || [];"
+    }
+  ]
+}</code></pre>
+
+<h3><span class="tag tag-green">200</span> Success (not detected)</h3>
+<pre><code>{
+  "domain": "google.com",
+  "uses_klaviyo": false,
+  "signals_matched": []
 }</code></pre>
 
 <h3><span class="tag tag-red">400</span> Bad Request</h3>
@@ -109,16 +133,44 @@ HTML = """<!DOCTYPE html>
   "error": "Website timed out"
 }</code></pre>
 
-<h2>Detection Signals</h2>
-<p>The API fetches the homepage HTML and checks for these Klaviyo indicators:</p>
+<h2>How Detection Works</h2>
+<p>The API performs a single HTTP GET request to <code>https://{domain}/</code> and parses the returned HTML. It scans for <strong>5 distinct signals</strong> that indicate Klaviyo is installed. If any signal is found, the result is <code>true</code>. Every matched signal is returned in the <code>signals_matched</code> array with its type and a detail snippet.</p>
+
+<table>
+  <tr><th>Signal</th><th><code>type</code> value</th><th>What it looks for</th></tr>
+  <tr>
+    <td>Klaviyo CDN script</td>
+    <td><code>klaviyo_cdn_script</code></td>
+    <td>A <code>&lt;script src="..."&gt;</code> tag where the URL contains <code>static.klaviyo.com</code>. This is Klaviyo's primary JS bundle &mdash; the most reliable indicator.</td>
+  </tr>
+  <tr>
+    <td>Other Klaviyo script</td>
+    <td><code>klaviyo_script</code></td>
+    <td>A <code>&lt;script src="..."&gt;</code> tag where the URL contains <code>klaviyo</code> but not the primary CDN. Catches alternate CDN variants or custom proxy paths.</td>
+  </tr>
+  <tr>
+    <td><code>_learnq</code> variable</td>
+    <td><code>learnq_variable</code></td>
+    <td>The <code>_learnq</code> JavaScript object inside an inline <code>&lt;script&gt;</code>. This is Klaviyo's legacy tracking queue, often initialized as <code>var _learnq = _learnq || [];</code>.</td>
+  </tr>
+  <tr>
+    <td>Klaviyo API endpoint</td>
+    <td><code>klaviyo_api_endpoint</code></td>
+    <td>A reference to <code>a.klaviyo.com</code> in an inline script. This is Klaviyo's event tracking and API ingestion endpoint.</td>
+  </tr>
+  <tr>
+    <td>Klaviyo form class</td>
+    <td><code>klaviyo_form_class</code></td>
+    <td>An HTML element with a class matching <code>klaviyo-form</code>. These are Klaviyo's embedded signup/popup forms.</td>
+  </tr>
+</table>
+
+<h3>Limitations</h3>
 <ul class="signals">
-  <li>Script tags loading from <code>static.klaviyo.com</code></li>
-  <li>Any script src containing <code>klaviyo</code></li>
-  <li><code>_learnq</code> variable in inline scripts (Klaviyo's tracking object)</li>
-  <li>References to <code>a.klaviyo.com</code> (Klaviyo API endpoint)</li>
-  <li><code>.klaviyo-form</code> CSS class in the DOM</li>
+  <li>Only the initial HTML is analyzed &mdash; scripts loaded dynamically via tag managers (e.g. Google Tag Manager) at runtime won't be detected.</li>
+  <li>Only the homepage (<code>/</code>) is checked. A site that loads Klaviyo only on specific pages (e.g. <code>/cart</code>) may be missed.</li>
+  <li>Password-protected or geo-blocked sites may return non-HTML responses, resulting in <code>false</code>.</li>
 </ul>
-<p>If <strong>any</strong> signal is found, <code>uses_klaviyo</code> is <code>true</code>.</p>
 
 <h2>Clay Integration</h2>
 <p>To use this API as a Clay HTTP API action:</p>
@@ -137,6 +189,10 @@ HTML = """<!DOCTYPE html>
   </form>
   <div class="result-box" id="resultBox">
     <div id="resultBadge" class="result-badge"></div>
+    <div class="result-signals" id="resultSignals">
+      <h4>Signals detected:</h4>
+      <div id="signalsList"></div>
+    </div>
     <pre class="result-json" id="resultJson"></pre>
     <div class="result-meta" id="resultMeta"></div>
   </div>
@@ -149,6 +205,8 @@ HTML = """<!DOCTYPE html>
   const btn = document.getElementById('tryBtn');
   const box = document.getElementById('resultBox');
   const badge = document.getElementById('resultBadge');
+  const signalsBox = document.getElementById('resultSignals');
+  const signalsList = document.getElementById('signalsList');
   const jsonEl = document.getElementById('resultJson');
   const meta = document.getElementById('resultMeta');
 
@@ -162,6 +220,8 @@ HTML = """<!DOCTYPE html>
     box.className = 'result-box visible';
     badge.textContent = '';
     badge.className = 'result-badge';
+    signalsBox.className = 'result-signals';
+    signalsList.innerHTML = '';
     jsonEl.textContent = '';
     meta.textContent = '';
 
@@ -172,17 +232,29 @@ HTML = """<!DOCTYPE html>
       const data = await resp.json();
 
       jsonEl.textContent = JSON.stringify(data, null, 2);
-      meta.textContent = resp.status + ' — ' + elapsed + 's';
+      meta.textContent = resp.status + ' \u2014 ' + elapsed + 's';
 
       if (data.error) {
         badge.textContent = 'Error: ' + data.error;
         badge.className = 'result-badge err';
       } else if (data.uses_klaviyo) {
-        badge.textContent = 'Yes — Uses Klaviyo';
+        badge.textContent = 'Yes \u2014 Uses Klaviyo';
         badge.className = 'result-badge yes';
       } else {
-        badge.textContent = 'No — Klaviyo not detected';
+        badge.textContent = 'No \u2014 Klaviyo not detected';
         badge.className = 'result-badge no';
+      }
+
+      // Render matched signals
+      if (data.signals_matched && data.signals_matched.length > 0) {
+        signalsBox.className = 'result-signals visible';
+        data.signals_matched.forEach(function(s) {
+          const row = document.createElement('div');
+          row.className = 'signal-item';
+          row.innerHTML = '<span class="signal-type">' + escHtml(s.type) + '</span>'
+            + '<span class="signal-detail">' + escHtml(s.detail) + '</span>';
+          signalsList.appendChild(row);
+        });
       }
     } catch (err) {
       badge.textContent = 'Request failed';
@@ -193,6 +265,12 @@ HTML = """<!DOCTYPE html>
     btn.disabled = false;
     btn.textContent = 'Check';
   });
+
+  function escHtml(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
 })();
 </script>
 
