@@ -67,9 +67,6 @@ api/
   index.py       # API documentation page
 pipeline/
   detector.py    # Detection functions for pipeline use
-  sources/       # Lead sourcing modules (Shopify reviews, etc.)
-  runner.py      # Pipeline orchestrator
-scraper.py       # Shopify App Store review scraper
 vercel.json      # Vercel routing config
 ```
 
@@ -77,9 +74,6 @@ vercel.json      # Vercel routing config
 
 ```bash
 pip install -r requirements.txt
-
-# Run the scraper
-python scraper.py --max-pages 5 --discover-domains
 
 # Deploy to Vercel
 vercel deploy --prod
