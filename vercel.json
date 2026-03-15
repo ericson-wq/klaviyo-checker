@@ -1,0 +1,25 @@
+{
+  "builds": [
+    {
+      "src": "api/detect.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 10
+      }
+    },
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/detect",
+      "dest": "api/detect.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "api/index.py"
+    }
+  ]
+}
