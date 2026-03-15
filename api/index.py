@@ -36,6 +36,23 @@ HTML = """<!DOCTYPE html>
   .tag-red { background: #ffe0e0; color: #c62828; }
   .tag-orange { background: #fff3cd; color: #856404; }
   .signals li { margin: 0.3rem 0; }
+  .try-it { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 1.25rem; margin: 0.75rem 0; }
+  .try-it form { display: flex; gap: 0.5rem; }
+  .try-it input[type="text"] { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #ced4da; border-radius: 6px; font-size: 0.95rem; font-family: monospace; outline: none; transition: border-color 0.15s; }
+  .try-it input[type="text"]:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+  .try-it button { padding: 0.5rem 1.25rem; background: #6366f1; color: #fff; border: none; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+  .try-it button:hover { background: #4f46e5; }
+  .try-it button:disabled { background: #a5b4fc; cursor: not-allowed; }
+  .result-box { margin-top: 0.75rem; display: none; }
+  .result-box.visible { display: block; }
+  .result-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem; border-radius: 6px; font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; }
+  .result-badge.yes { background: #d3f9d8; color: #087f23; }
+  .result-badge.no { background: #ffe0e0; color: #c62828; }
+  .result-badge.err { background: #fff3cd; color: #856404; }
+  .result-json { background: #1a1a2e; color: #e9ecef; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.85rem; font-family: monospace; white-space: pre; overflow-x: auto; margin: 0; }
+  .result-meta { font-size: 0.8rem; color: #6c757d; margin-top: 0.4rem; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 0.3rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   footer { margin-top: 3rem; color: #6c757d; font-size: 0.85rem; text-align: center; }
 </style>
 </head>
@@ -112,9 +129,76 @@ HTML = """<!DOCTYPE html>
   <li>Map <code>uses_klaviyo</code> from the response to your output column</li>
 </ol>
 
+<h2>Try It</h2>
+<div class="try-it">
+  <form id="tryForm" autocomplete="off">
+    <input type="text" id="domainInput" placeholder="e.g. colourpop.com" spellcheck="false">
+    <button type="submit" id="tryBtn">Check</button>
+  </form>
+  <div class="result-box" id="resultBox">
+    <div id="resultBadge" class="result-badge"></div>
+    <pre class="result-json" id="resultJson"></pre>
+    <div class="result-meta" id="resultMeta"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const form = document.getElementById('tryForm');
+  const input = document.getElementById('domainInput');
+  const btn = document.getElementById('tryBtn');
+  const box = document.getElementById('resultBox');
+  const badge = document.getElementById('resultBadge');
+  const jsonEl = document.getElementById('resultJson');
+  const meta = document.getElementById('resultMeta');
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const domain = input.value.trim();
+    if (!domain) { input.focus(); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Checking...';
+    box.className = 'result-box visible';
+    badge.textContent = '';
+    badge.className = 'result-badge';
+    jsonEl.textContent = '';
+    meta.textContent = '';
+
+    const start = performance.now();
+    try {
+      const resp = await fetch('/api/detect?domain=' + encodeURIComponent(domain));
+      const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+      const data = await resp.json();
+
+      jsonEl.textContent = JSON.stringify(data, null, 2);
+      meta.textContent = resp.status + ' — ' + elapsed + 's';
+
+      if (data.error) {
+        badge.textContent = 'Error: ' + data.error;
+        badge.className = 'result-badge err';
+      } else if (data.uses_klaviyo) {
+        badge.textContent = 'Yes — Uses Klaviyo';
+        badge.className = 'result-badge yes';
+      } else {
+        badge.textContent = 'No — Klaviyo not detected';
+        badge.className = 'result-badge no';
+      }
+    } catch (err) {
+      badge.textContent = 'Request failed';
+      badge.className = 'result-badge err';
+      jsonEl.textContent = err.message;
+      meta.textContent = '';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Check';
+  });
+})();
+</script>
+
 <h2>Examples</h2>
 <pre><code># Check a known Klaviyo user
-curl "/api/detect?domain=gymshark.com"
+curl "/api/detect?domain=colourpop.com"
 
 # Check a non-Klaviyo site
 curl "/api/detect?domain=google.com"
