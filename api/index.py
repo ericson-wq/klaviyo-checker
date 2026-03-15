@@ -1,7 +1,7 @@
 """
 API Documentation — Vercel Serverless Function
 
-GET / — Returns HTML documentation for the Klaviyo Detection API.
+GET / — Returns HTML documentation for the E-commerce Technology Detection API.
 """
 
 import json
@@ -13,7 +13,7 @@ HTML = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Klaviyo Detection API</title>
+<title>E-commerce Technology Detection API</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1a1a2e; background: #f8f9fa; padding: 2rem 1rem; }
@@ -66,8 +66,8 @@ HTML = """<!DOCTYPE html>
 <body>
 <div class="container">
 
-<h1>Klaviyo Detection API</h1>
-<p class="subtitle">Check if a website uses Klaviyo for email marketing.</p>
+<h1>E-commerce Technology Detection API</h1>
+<p class="subtitle">Check if a website uses Klaviyo, Littledata, or Elevar.</p>
 
 <h2>Endpoint</h2>
 <div class="endpoint">
@@ -82,87 +82,81 @@ HTML = """<!DOCTYPE html>
 </table>
 
 <h2>Response</h2>
-<p>All responses return JSON. The <code>uses_klaviyo</code> field is always present.</p>
+<p>All responses return JSON with detection results for Klaviyo, Littledata, and Elevar.</p>
 
-<h3><span class="tag tag-green">200</span> Success (Klaviyo detected)</h3>
+<h3><span class="tag tag-green">200</span> Success</h3>
 <pre><code>{
-  "domain": "colourpop.com",
+  "domain": "example-store.com",
   "uses_klaviyo": true,
   "signals_matched": [
-    {
-      "type": "klaviyo_cdn_script",
-      "detail": "https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=XYZ"
-    },
-    {
-      "type": "learnq_variable",
-      "detail": "var _learnq = _learnq || [];"
-    }
+    {"type": "klaviyo_cdn_script", "detail": "https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=XYZ"}
+  ],
+  "uses_littledata": false,
+  "littledata_signals": [],
+  "uses_elevar": true,
+  "elevar_signals": [
+    {"type": "elevar_datalayer", "detail": "window.ElevarDataLayer reference found"}
   ]
 }</code></pre>
 
-<h3><span class="tag tag-green">200</span> Success (not detected)</h3>
+<h3><span class="tag tag-green">200</span> Nothing detected</h3>
 <pre><code>{
   "domain": "google.com",
   "uses_klaviyo": false,
-  "signals_matched": []
+  "signals_matched": [],
+  "uses_littledata": false,
+  "littledata_signals": [],
+  "uses_elevar": false,
+  "elevar_signals": []
 }</code></pre>
 
 <h3><span class="tag tag-red">400</span> Bad Request</h3>
 <pre><code>{
   "domain": null,
   "uses_klaviyo": false,
+  "uses_littledata": false,
+  "uses_elevar": false,
   "error": "Domain parameter is required"
 }</code></pre>
-<pre><code>{
-  "domain": "not valid!",
-  "uses_klaviyo": false,
-  "error": "Invalid domain format"
-}</code></pre>
 
-<h3><span class="tag tag-orange">502</span> Upstream Error</h3>
+<h3><span class="tag tag-orange">502 / 504</span> Upstream Error / Timeout</h3>
 <pre><code>{
   "domain": "unreachable.example",
   "uses_klaviyo": false,
+  "uses_littledata": false,
+  "uses_elevar": false,
   "error": "Could not fetch website"
 }</code></pre>
 
-<h3><span class="tag tag-orange">504</span> Timeout</h3>
-<pre><code>{
-  "domain": "slow.example",
-  "uses_klaviyo": false,
-  "error": "Website timed out"
-}</code></pre>
-
 <h2>How Detection Works</h2>
-<p>The API performs a single HTTP GET request to <code>https://{domain}/</code> and parses the returned HTML. It scans for <strong>5 distinct signals</strong> that indicate Klaviyo is installed. If any signal is found, the result is <code>true</code>. Every matched signal is returned in the <code>signals_matched</code> array with its type and a detail snippet.</p>
+<p>The API performs a single HTTP GET request to <code>https://{domain}/</code> and parses the returned HTML. It scans for signals from three technologies. If any signal is found for a technology, the corresponding <code>uses_*</code> field is <code>true</code>.</p>
 
+<h3>Klaviyo Signals (5)</h3>
 <table>
   <tr><th>Signal</th><th><code>type</code> value</th><th>What it looks for</th></tr>
-  <tr>
-    <td>Klaviyo CDN script</td>
-    <td><code>klaviyo_cdn_script</code></td>
-    <td>A <code>&lt;script src="..."&gt;</code> tag where the URL contains <code>static.klaviyo.com</code>. This is Klaviyo's primary JS bundle &mdash; the most reliable indicator.</td>
-  </tr>
-  <tr>
-    <td>Other Klaviyo script</td>
-    <td><code>klaviyo_script</code></td>
-    <td>A <code>&lt;script src="..."&gt;</code> tag where the URL contains <code>klaviyo</code> but not the primary CDN. Catches alternate CDN variants or custom proxy paths.</td>
-  </tr>
-  <tr>
-    <td><code>_learnq</code> variable</td>
-    <td><code>learnq_variable</code></td>
-    <td>The <code>_learnq</code> JavaScript object inside an inline <code>&lt;script&gt;</code>. This is Klaviyo's legacy tracking queue, often initialized as <code>var _learnq = _learnq || [];</code>.</td>
-  </tr>
-  <tr>
-    <td>Klaviyo API endpoint</td>
-    <td><code>klaviyo_api_endpoint</code></td>
-    <td>A reference to <code>a.klaviyo.com</code> in an inline script. This is Klaviyo's event tracking and API ingestion endpoint.</td>
-  </tr>
-  <tr>
-    <td>Klaviyo form class</td>
-    <td><code>klaviyo_form_class</code></td>
-    <td>An HTML element with a class matching <code>klaviyo-form</code>. These are Klaviyo's embedded signup/popup forms.</td>
-  </tr>
+  <tr><td>CDN script</td><td><code>klaviyo_cdn_script</code></td><td><code>&lt;script src&gt;</code> containing <code>static.klaviyo.com</code></td></tr>
+  <tr><td>Other script</td><td><code>klaviyo_script</code></td><td><code>&lt;script src&gt;</code> containing <code>klaviyo</code> (non-CDN)</td></tr>
+  <tr><td><code>_learnq</code> variable</td><td><code>learnq_variable</code></td><td><code>_learnq</code> in inline scripts</td></tr>
+  <tr><td>API endpoint</td><td><code>klaviyo_api_endpoint</code></td><td><code>a.klaviyo.com</code> in inline scripts</td></tr>
+  <tr><td>Form class</td><td><code>klaviyo_form_class</code></td><td><code>.klaviyo-form</code> class in DOM</td></tr>
+</table>
+
+<h3>Littledata Signals (4)</h3>
+<table>
+  <tr><th>Signal</th><th><code>type</code> value</th><th>What it looks for</th></tr>
+  <tr><td>LittledataLayer variable</td><td><code>littledata_layer</code></td><td><code>window.LittledataLayer</code> or <code>LittledataLayer</code> in inline scripts</td></tr>
+  <tr><td>Littledata script</td><td><code>littledata_script</code></td><td><code>&lt;script src&gt;</code> containing <code>littledata</code></td></tr>
+  <tr><td>Domain reference</td><td><code>littledata_domain</code></td><td><code>littledata.io</code> in inline scripts</td></tr>
+  <tr><td>App embed</td><td><code>littledata_app_embed</code></td><td>Shopify app embed block containing <code>littledata</code></td></tr>
+</table>
+
+<h3>Elevar Signals (4)</h3>
+<table>
+  <tr><th>Signal</th><th><code>type</code> value</th><th>What it looks for</th></tr>
+  <tr><td>ElevarDataLayer variable</td><td><code>elevar_datalayer</code></td><td><code>window.ElevarDataLayer</code> in inline scripts</td></tr>
+  <tr><td>ElevarGtmSuite variable</td><td><code>elevar_gtm_suite</code></td><td><code>window.ElevarGtmSuite</code> in inline scripts</td></tr>
+  <tr><td>Elevar script</td><td><code>elevar_script</code></td><td><code>&lt;script src&gt;</code> containing <code>elevar</code> or <code>getelevar</code></td></tr>
+  <tr><td>Domain reference</td><td><code>elevar_domain</code></td><td><code>getelevar.com</code> in scripts</td></tr>
 </table>
 
 <h3>Limitations</h3>
@@ -178,7 +172,7 @@ HTML = """<!DOCTYPE html>
   <li>Add an <strong>HTTP API</strong> enrichment column</li>
   <li>Set method to <strong>GET</strong></li>
   <li>Set the URL to: <code>https://klaviyo-detect.vercel.app/api/detect?domain={{domain_column}}</code></li>
-  <li>Map <code>uses_klaviyo</code> from the response to your output column</li>
+  <li>Map <code>uses_klaviyo</code>, <code>uses_littledata</code>, and <code>uses_elevar</code> to your output columns</li>
 </ol>
 
 <h2>Try It</h2>
@@ -237,19 +231,30 @@ HTML = """<!DOCTYPE html>
       if (data.error) {
         badge.textContent = 'Error: ' + data.error;
         badge.className = 'result-badge err';
-      } else if (data.uses_klaviyo) {
-        badge.textContent = 'Yes \u2014 Uses Klaviyo';
-        badge.className = 'result-badge yes';
       } else {
-        badge.textContent = 'No \u2014 Klaviyo not detected';
-        badge.className = 'result-badge no';
+        var detected = [];
+        if (data.uses_klaviyo) detected.push('Klaviyo');
+        if (data.uses_littledata) detected.push('Littledata');
+        if (data.uses_elevar) detected.push('Elevar');
+        if (detected.length > 0) {
+          badge.textContent = 'Detected: ' + detected.join(', ');
+          badge.className = 'result-badge yes';
+        } else {
+          badge.textContent = 'No technologies detected';
+          badge.className = 'result-badge no';
+        }
       }
 
-      // Render matched signals
-      if (data.signals_matched && data.signals_matched.length > 0) {
+      // Render all matched signals
+      var allSignals = [].concat(
+        data.signals_matched || [],
+        data.littledata_signals || [],
+        data.elevar_signals || []
+      );
+      if (allSignals.length > 0) {
         signalsBox.className = 'result-signals visible';
-        data.signals_matched.forEach(function(s) {
-          const row = document.createElement('div');
+        allSignals.forEach(function(s) {
+          var row = document.createElement('div');
           row.className = 'signal-item';
           row.innerHTML = '<span class="signal-type">' + escHtml(s.type) + '</span>'
             + '<span class="signal-detail">' + escHtml(s.detail) + '</span>';
@@ -284,7 +289,7 @@ curl "/api/detect?domain=google.com"
 # Handles messy input gracefully
 curl "/api/detect?domain=https://www.example.com/page?q=1"</code></pre>
 
-<footer>Klaviyo Detection API &middot; Deployed on Vercel</footer>
+<footer>E-commerce Technology Detection API &middot; Deployed on Vercel</footer>
 
 </div>
 </body>
