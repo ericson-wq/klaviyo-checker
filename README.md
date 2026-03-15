@@ -2,8 +2,6 @@
 
 Detect whether a website uses **Klaviyo**, **Littledata**, or **Elevar** by scanning its HTML for technology-specific signals.
 
-**Live API:** [`https://klaviyo-detect.vercel.app`](https://klaviyo-detect.vercel.app)
-
 ## API Usage
 
 ```
@@ -58,7 +56,7 @@ GET /api/detect?domain=example.com
 
 1. Add an **HTTP API** enrichment column
 2. Set method to **GET**
-3. Set URL to: `https://klaviyo-detect.vercel.app/api/detect?domain={{domain_column}}`
+3. Set URL to: `https://your-vercel-app.vercel.app/api/detect?domain={{domain_column}}`
 4. Map `uses_klaviyo`, `uses_littledata`, and `uses_elevar` to output columns
 
 ## Project Structure
