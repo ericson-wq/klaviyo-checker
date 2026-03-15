@@ -177,7 +177,7 @@ HTML = """<!DOCTYPE html>
 <ol style="margin: 0.5rem 0; padding-left: 1.25rem;">
   <li>Add an <strong>HTTP API</strong> enrichment column</li>
   <li>Set method to <strong>GET</strong></li>
-  <li>Set the URL to: <code>https://&lt;your-vercel-url&gt;/api/detect?domain={{domain_column}}</code></li>
+  <li>Set the URL to: <code>https://klaviyo-detect.vercel.app/api/detect?domain={{domain_column}}</code></li>
   <li>Map <code>uses_klaviyo</code> from the response to your output column</li>
 </ol>
 
