@@ -7,6 +7,7 @@ Fetches the website's HTML and checks for signals from:
 - Klaviyo (email marketing)
 - Littledata (data layer / analytics)
 - Elevar (conversion tracking)
+- Shopify (e-commerce platform)
 """
 
 import json
@@ -186,6 +187,64 @@ def detect_elevar(html: str) -> dict:
     }
 
 
+def detect_shopify(html: str, headers: dict | None = None) -> dict:
+    """Check HTML (and optional response headers) for Shopify-specific signals."""
+    soup = BeautifulSoup(html, "html.parser")
+    signals = []
+
+    # 1: Script or link src containing cdn.shopify.com
+    for tag in soup.find_all(["script", "link"], src=True):
+        src = tag["src"]
+        if "cdn.shopify.com" in src.lower():
+            signals.append({"type": "shopify_cdn", "detail": src})
+            break
+    if not any(s["type"] == "shopify_cdn" for s in signals):
+        for link in soup.find_all("link", href=True):
+            href = link["href"]
+            if "cdn.shopify.com" in href.lower():
+                signals.append({"type": "shopify_cdn", "detail": href})
+                break
+
+    # 2: window.Shopify or Shopify. variable in inline scripts
+    for script in soup.find_all("script", src=False):
+        text = script.string or ""
+        if re.search(r"(window\.)?Shopify\s*[=.]", text):
+            idx = text.index("Shopify")
+            start = max(0, idx - 20)
+            end = min(len(text), idx + 40)
+            snippet = text[start:end].strip().replace("\n", " ")
+            signals.append({"type": "shopify_variable", "detail": snippet})
+            break
+
+    # 3: References to myshopify.com
+    for tag in soup.find_all(["meta", "link", "a", "script"], True):
+        attrs_str = " ".join(str(v) for v in tag.attrs.values())
+        text = tag.string or ""
+        combined = attrs_str + " " + text
+        if "myshopify.com" in combined.lower():
+            signals.append({"type": "shopify_myshopify_domain", "detail": "myshopify.com reference found"})
+            break
+
+    # 4: shopify-section class in DOM elements
+    section_el = soup.find(class_=re.compile(r"shopify-section"))
+    if section_el:
+        classes = " ".join(section_el.get("class", []))
+        signals.append({"type": "shopify_section_class", "detail": classes})
+
+    # 5: X-ShopId response header
+    if headers:
+        for hdr in ("x-shopid", "x-shopify-stage"):
+            val = headers.get(hdr) or headers.get(hdr.title()) or headers.get(hdr.upper())
+            if val:
+                signals.append({"type": "shopify_header", "detail": f"{hdr}: {val}"})
+                break
+
+    return {
+        "detected": len(signals) > 0,
+        "signals": signals,
+    }
+
+
 def _json_response(handler, status: int, body: dict):
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
@@ -206,6 +265,7 @@ class handler(BaseHTTPRequestHandler):
                     "uses_klaviyo": False,
                     "uses_littledata": False,
                     "uses_elevar": False,
+                    "uses_shopify": False,
                     "error": "Domain parameter is required",
                 })
 
@@ -216,6 +276,7 @@ class handler(BaseHTTPRequestHandler):
                     "uses_klaviyo": False,
                     "uses_littledata": False,
                     "uses_elevar": False,
+                    "uses_shopify": False,
                     "error": "Invalid domain format",
                 })
 
@@ -233,6 +294,7 @@ class handler(BaseHTTPRequestHandler):
                     "uses_klaviyo": False,
                     "uses_littledata": False,
                     "uses_elevar": False,
+                    "uses_shopify": False,
                     "error": "Website timed out",
                 })
             except httpx.HTTPError:
@@ -241,6 +303,7 @@ class handler(BaseHTTPRequestHandler):
                     "uses_klaviyo": False,
                     "uses_littledata": False,
                     "uses_elevar": False,
+                    "uses_shopify": False,
                     "error": "Could not fetch website",
                 })
 
@@ -254,12 +317,16 @@ class handler(BaseHTTPRequestHandler):
                     "littledata_signals": [],
                     "uses_elevar": False,
                     "elevar_signals": [],
+                    "uses_shopify": False,
+                    "shopify_signals": [],
                 })
 
             html = resp.text
+            resp_headers = dict(resp.headers)
             klaviyo_result = detect_klaviyo(html)
             littledata_result = detect_littledata(html)
             elevar_result = detect_elevar(html)
+            shopify_result = detect_shopify(html, resp_headers)
 
             return _json_response(self, 200, {
                 "domain": domain,
@@ -269,6 +336,8 @@ class handler(BaseHTTPRequestHandler):
                 "littledata_signals": littledata_result["signals"],
                 "uses_elevar": elevar_result["detected"],
                 "elevar_signals": elevar_result["signals"],
+                "uses_shopify": shopify_result["detected"],
+                "shopify_signals": shopify_result["signals"],
             })
 
         except Exception:
@@ -277,5 +346,6 @@ class handler(BaseHTTPRequestHandler):
                 "uses_klaviyo": False,
                 "uses_littledata": False,
                 "uses_elevar": False,
+                "uses_shopify": False,
                 "error": "Internal error",
             })

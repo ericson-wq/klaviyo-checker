@@ -67,7 +67,7 @@ HTML = """<!DOCTYPE html>
 <div class="container">
 
 <h1>E-commerce Technology Detection API</h1>
-<p class="subtitle">Check if a website uses Klaviyo, Littledata, or Elevar.</p>
+<p class="subtitle">Check if a website uses Klaviyo, Littledata, Elevar, or Shopify.</p>
 
 <h2>Endpoint</h2>
 <div class="endpoint">
@@ -82,7 +82,7 @@ HTML = """<!DOCTYPE html>
 </table>
 
 <h2>Response</h2>
-<p>All responses return JSON with detection results for Klaviyo, Littledata, and Elevar.</p>
+<p>All responses return JSON with detection results for Klaviyo, Littledata, Elevar, and Shopify.</p>
 
 <h3><span class="tag tag-green">200</span> Success</h3>
 <pre><code>{
@@ -96,6 +96,10 @@ HTML = """<!DOCTYPE html>
   "uses_elevar": true,
   "elevar_signals": [
     {"type": "elevar_datalayer", "detail": "window.ElevarDataLayer reference found"}
+  ],
+  "uses_shopify": true,
+  "shopify_signals": [
+    {"type": "shopify_cdn", "detail": "https://cdn.shopify.com/s/files/1/example/t/1/assets/theme.js"}
   ]
 }</code></pre>
 
@@ -107,7 +111,9 @@ HTML = """<!DOCTYPE html>
   "uses_littledata": false,
   "littledata_signals": [],
   "uses_elevar": false,
-  "elevar_signals": []
+  "elevar_signals": [],
+  "uses_shopify": false,
+  "shopify_signals": []
 }</code></pre>
 
 <h3><span class="tag tag-red">400</span> Bad Request</h3>
@@ -116,6 +122,7 @@ HTML = """<!DOCTYPE html>
   "uses_klaviyo": false,
   "uses_littledata": false,
   "uses_elevar": false,
+  "uses_shopify": false,
   "error": "Domain parameter is required"
 }</code></pre>
 
@@ -125,11 +132,12 @@ HTML = """<!DOCTYPE html>
   "uses_klaviyo": false,
   "uses_littledata": false,
   "uses_elevar": false,
+  "uses_shopify": false,
   "error": "Could not fetch website"
 }</code></pre>
 
 <h2>How Detection Works</h2>
-<p>The API performs a single HTTP GET request to <code>https://{domain}/</code> and parses the returned HTML. It scans for signals from three technologies. If any signal is found for a technology, the corresponding <code>uses_*</code> field is <code>true</code>.</p>
+<p>The API performs a single HTTP GET request to <code>https://{domain}/</code> and parses the returned HTML. It scans for signals from four technologies. If any signal is found for a technology, the corresponding <code>uses_*</code> field is <code>true</code>.</p>
 
 <h3>Klaviyo Signals (5)</h3>
 <table>
@@ -159,6 +167,16 @@ HTML = """<!DOCTYPE html>
   <tr><td>Domain reference</td><td><code>elevar_domain</code></td><td><code>getelevar.com</code> in scripts</td></tr>
 </table>
 
+<h3>Shopify Signals (5)</h3>
+<table>
+  <tr><th>Signal</th><th><code>type</code> value</th><th>What it looks for</th></tr>
+  <tr><td>CDN assets</td><td><code>shopify_cdn</code></td><td><code>&lt;script src&gt;</code> or <code>&lt;link href&gt;</code> containing <code>cdn.shopify.com</code></td></tr>
+  <tr><td>Shopify variable</td><td><code>shopify_variable</code></td><td><code>window.Shopify</code> or <code>Shopify.</code> in inline scripts</td></tr>
+  <tr><td>myshopify.com domain</td><td><code>shopify_myshopify_domain</code></td><td><code>myshopify.com</code> reference in HTML attributes or content</td></tr>
+  <tr><td>Section class</td><td><code>shopify_section_class</code></td><td><code>.shopify-section</code> class in DOM elements</td></tr>
+  <tr><td>Response header</td><td><code>shopify_header</code></td><td><code>X-ShopId</code> or <code>X-Shopify-Stage</code> response headers</td></tr>
+</table>
+
 <h3>Limitations</h3>
 <ul class="signals">
   <li>Only the initial HTML is analyzed &mdash; scripts loaded dynamically via tag managers (e.g. Google Tag Manager) at runtime won't be detected.</li>
@@ -172,7 +190,7 @@ HTML = """<!DOCTYPE html>
   <li>Add an <strong>HTTP API</strong> enrichment column</li>
   <li>Set method to <strong>GET</strong></li>
   <li>Set the URL to: <code>https://klaviyo-detect.vercel.app/api/detect?domain={{domain_column}}</code></li>
-  <li>Map <code>uses_klaviyo</code>, <code>uses_littledata</code>, and <code>uses_elevar</code> to your output columns</li>
+  <li>Map <code>uses_klaviyo</code>, <code>uses_littledata</code>, <code>uses_elevar</code>, and <code>uses_shopify</code> to your output columns</li>
 </ol>
 
 <h2>Try It</h2>
@@ -236,6 +254,7 @@ HTML = """<!DOCTYPE html>
         if (data.uses_klaviyo) detected.push('Klaviyo');
         if (data.uses_littledata) detected.push('Littledata');
         if (data.uses_elevar) detected.push('Elevar');
+        if (data.uses_shopify) detected.push('Shopify');
         if (detected.length > 0) {
           badge.textContent = 'Detected: ' + detected.join(', ');
           badge.className = 'result-badge yes';
@@ -249,7 +268,8 @@ HTML = """<!DOCTYPE html>
       var allSignals = [].concat(
         data.signals_matched || [],
         data.littledata_signals || [],
-        data.elevar_signals || []
+        data.elevar_signals || [],
+        data.shopify_signals || []
       );
       if (allSignals.length > 0) {
         signalsBox.className = 'result-signals visible';
