@@ -1,6 +1,6 @@
 # E-commerce Technology Detection API
 
-Detect whether a website uses **Klaviyo**, **Littledata**, or **Elevar** by scanning its HTML for technology-specific signals.
+Detect whether a website uses **Klaviyo**, **Littledata**, **Elevar**, or **Shopify** by scanning its HTML for technology-specific signals.
 
 ## API Usage
 
@@ -22,6 +22,10 @@ GET /api/detect?domain=example.com
   "uses_elevar": true,
   "elevar_signals": [
     {"type": "elevar_datalayer", "detail": "window.ElevarDataLayer reference found"}
+  ],
+  "uses_shopify": true,
+  "shopify_signals": [
+    {"type": "shopify_cdn", "detail": "https://cdn.shopify.com/s/files/1/example/t/1/assets/theme.js"}
   ]
 }
 ```
@@ -43,6 +47,11 @@ GET /api/detect?domain=example.com
 | | `ElevarGtmSuite` variable | `elevar_gtm_suite` |
 | | Elevar script | `elevar_script` |
 | | `getelevar.com` domain reference | `elevar_domain` |
+| **Shopify** | CDN asset (`cdn.shopify.com`) | `shopify_cdn` |
+| | `window.Shopify` variable | `shopify_variable` |
+| | `myshopify.com` domain reference | `shopify_myshopify_domain` |
+| | `shopify-section` class | `shopify_section_class` |
+| | `X-ShopId` / `X-Shopify-Stage` header | `shopify_header` |
 
 ### Error Responses
 
@@ -57,7 +66,7 @@ GET /api/detect?domain=example.com
 1. Add an **HTTP API** enrichment column
 2. Set method to **GET**
 3. Set URL to: `https://your-vercel-app.vercel.app/api/detect?domain={{domain_column}}`
-4. Map `uses_klaviyo`, `uses_littledata`, and `uses_elevar` to output columns
+4. Map `uses_klaviyo`, `uses_littledata`, `uses_elevar`, and `uses_shopify` to output columns
 
 ## Project Structure
 
