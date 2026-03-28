@@ -8,6 +8,7 @@ Fetches the website's HTML and checks for signals from:
 - Littledata (data layer / analytics)
 - Elevar (conversion tracking)
 - Shopify (e-commerce platform)
+- wetracked.io (ad tracking / attribution)
 """
 
 import json
@@ -245,6 +246,59 @@ def detect_shopify(html: str, headers: dict | None = None) -> dict:
     }
 
 
+def detect_wetracked(html: str) -> dict:
+    """Check HTML for wetracked.io-specific signals."""
+    soup = BeautifulSoup(html, "html.parser")
+    signals = []
+
+    # 1: Script src containing pixel.wetracked.io
+    for script in soup.find_all("script", src=True):
+        src = script["src"]
+        if "pixel.wetracked.io" in src.lower():
+            signals.append({"type": "wetracked_pixel_script", "detail": src})
+
+    # 2: Script src containing wetracked.io (other CDN variants)
+    for script in soup.find_all("script", src=True):
+        src = script["src"]
+        if "wetracked.io" in src.lower() and "pixel.wetracked.io" not in src.lower():
+            signals.append({"type": "wetracked_script", "detail": src})
+
+    # 3: wetracked.io references in inline scripts
+    for script in soup.find_all("script", src=False):
+        text = script.string or ""
+        if "wetracked.io" in text.lower():
+            signals.append({"type": "wetracked_inline_ref", "detail": "wetracked.io reference found"})
+            break
+
+    # 4: wt:options variable in inline scripts
+    for script in soup.find_all("script", src=False):
+        text = script.string or ""
+        if "wt:options" in text:
+            signals.append({"type": "wetracked_wt_options", "detail": "wt:options reference found"})
+            break
+
+    # 5: Shopify app embed block containing wetracked
+    for comment in soup.find_all(string=lambda t: isinstance(t, str) and "wetracked" in t.lower()):
+        parent = comment.parent
+        if parent and parent.name and parent.get("id", ""):
+            if "app-embed" in parent.get("id", "").lower() or "app-block" in parent.get("id", "").lower():
+                signals.append({"type": "wetracked_app_embed", "detail": f"Shopify app embed: {parent.get('id', '')}"})
+                break
+    if not any(s["type"] == "wetracked_app_embed" for s in signals):
+        for el in soup.find_all(attrs={"data-app": re.compile(r"wetracked", re.IGNORECASE)}):
+            signals.append({"type": "wetracked_app_embed", "detail": f"data-app attribute: {el.get('data-app', '')}"})
+            break
+
+    # 6: wt-for-woocommerce plugin reference in HTML
+    if "wt-for-woocommerce" in html.lower():
+        signals.append({"type": "wetracked_woo_plugin", "detail": "wt-for-woocommerce plugin detected"})
+
+    return {
+        "detected": len(signals) > 0,
+        "signals": signals,
+    }
+
+
 def _json_response(handler, status: int, body: dict):
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
@@ -266,6 +320,7 @@ class handler(BaseHTTPRequestHandler):
                     "uses_littledata": False,
                     "uses_elevar": False,
                     "uses_shopify": False,
+                    "uses_wetracked": False,
                     "error": "Domain parameter is required",
                 })
 
@@ -277,6 +332,7 @@ class handler(BaseHTTPRequestHandler):
                     "uses_littledata": False,
                     "uses_elevar": False,
                     "uses_shopify": False,
+                    "uses_wetracked": False,
                     "error": "Invalid domain format",
                 })
 
@@ -295,6 +351,7 @@ class handler(BaseHTTPRequestHandler):
                     "uses_littledata": False,
                     "uses_elevar": False,
                     "uses_shopify": False,
+                    "uses_wetracked": False,
                     "error": "Website timed out",
                 })
             except httpx.HTTPError:
@@ -304,6 +361,7 @@ class handler(BaseHTTPRequestHandler):
                     "uses_littledata": False,
                     "uses_elevar": False,
                     "uses_shopify": False,
+                    "uses_wetracked": False,
                     "error": "Could not fetch website",
                 })
 
@@ -319,6 +377,8 @@ class handler(BaseHTTPRequestHandler):
                     "elevar_signals": [],
                     "uses_shopify": False,
                     "shopify_signals": [],
+                    "uses_wetracked": False,
+                    "wetracked_signals": [],
                 })
 
             html = resp.text
@@ -327,6 +387,7 @@ class handler(BaseHTTPRequestHandler):
             littledata_result = detect_littledata(html)
             elevar_result = detect_elevar(html)
             shopify_result = detect_shopify(html, resp_headers)
+            wetracked_result = detect_wetracked(html)
 
             return _json_response(self, 200, {
                 "domain": domain,
@@ -338,6 +399,8 @@ class handler(BaseHTTPRequestHandler):
                 "elevar_signals": elevar_result["signals"],
                 "uses_shopify": shopify_result["detected"],
                 "shopify_signals": shopify_result["signals"],
+                "uses_wetracked": wetracked_result["detected"],
+                "wetracked_signals": wetracked_result["signals"],
             })
 
         except Exception:
@@ -347,5 +410,6 @@ class handler(BaseHTTPRequestHandler):
                 "uses_littledata": False,
                 "uses_elevar": False,
                 "uses_shopify": False,
+                "uses_wetracked": False,
                 "error": "Internal error",
             })

@@ -67,7 +67,7 @@ HTML = """<!DOCTYPE html>
 <div class="container">
 
 <h1>E-commerce Technology Detection API</h1>
-<p class="subtitle">Check if a website uses Klaviyo, Littledata, Elevar, or Shopify.</p>
+<p class="subtitle">Check if a website uses Klaviyo, Littledata, Elevar, Shopify, or wetracked.io.</p>
 
 <h2>Endpoint</h2>
 <div class="endpoint">
@@ -82,7 +82,7 @@ HTML = """<!DOCTYPE html>
 </table>
 
 <h2>Response</h2>
-<p>All responses return JSON with detection results for Klaviyo, Littledata, Elevar, and Shopify.</p>
+<p>All responses return JSON with detection results for Klaviyo, Littledata, Elevar, Shopify, and wetracked.io.</p>
 
 <h3><span class="tag tag-green">200</span> Success</h3>
 <pre><code>{
@@ -100,7 +100,9 @@ HTML = """<!DOCTYPE html>
   "uses_shopify": true,
   "shopify_signals": [
     {"type": "shopify_cdn", "detail": "https://cdn.shopify.com/s/files/1/example/t/1/assets/theme.js"}
-  ]
+  ],
+  "uses_wetracked": false,
+  "wetracked_signals": []
 }</code></pre>
 
 <h3><span class="tag tag-green">200</span> Nothing detected</h3>
@@ -113,7 +115,9 @@ HTML = """<!DOCTYPE html>
   "uses_elevar": false,
   "elevar_signals": [],
   "uses_shopify": false,
-  "shopify_signals": []
+  "shopify_signals": [],
+  "uses_wetracked": false,
+  "wetracked_signals": []
 }</code></pre>
 
 <h3><span class="tag tag-red">400</span> Bad Request</h3>
@@ -123,6 +127,7 @@ HTML = """<!DOCTYPE html>
   "uses_littledata": false,
   "uses_elevar": false,
   "uses_shopify": false,
+  "uses_wetracked": false,
   "error": "Domain parameter is required"
 }</code></pre>
 
@@ -133,11 +138,12 @@ HTML = """<!DOCTYPE html>
   "uses_littledata": false,
   "uses_elevar": false,
   "uses_shopify": false,
+  "uses_wetracked": false,
   "error": "Could not fetch website"
 }</code></pre>
 
 <h2>How Detection Works</h2>
-<p>The API performs a single HTTP GET request to <code>https://{domain}/</code> and parses the returned HTML. It scans for signals from four technologies. If any signal is found for a technology, the corresponding <code>uses_*</code> field is <code>true</code>.</p>
+<p>The API performs a single HTTP GET request to <code>https://{domain}/</code> and parses the returned HTML. It scans for signals from five technologies. If any signal is found for a technology, the corresponding <code>uses_*</code> field is <code>true</code>.</p>
 
 <h3>Klaviyo Signals (5)</h3>
 <table>
@@ -177,6 +183,17 @@ HTML = """<!DOCTYPE html>
   <tr><td>Response header</td><td><code>shopify_header</code></td><td><code>X-ShopId</code> or <code>X-Shopify-Stage</code> response headers</td></tr>
 </table>
 
+<h3>wetracked.io Signals (6)</h3>
+<table>
+  <tr><th>Signal</th><th><code>type</code> value</th><th>What it looks for</th></tr>
+  <tr><td>Pixel script</td><td><code>wetracked_pixel_script</code></td><td><code>&lt;script src&gt;</code> containing <code>pixel.wetracked.io</code></td></tr>
+  <tr><td>Other script</td><td><code>wetracked_script</code></td><td><code>&lt;script src&gt;</code> containing <code>wetracked.io</code> (non-pixel)</td></tr>
+  <tr><td>Inline reference</td><td><code>wetracked_inline_ref</code></td><td><code>wetracked.io</code> in inline scripts</td></tr>
+  <tr><td><code>wt:options</code> variable</td><td><code>wetracked_wt_options</code></td><td><code>wt:options</code> in inline scripts</td></tr>
+  <tr><td>App embed</td><td><code>wetracked_app_embed</code></td><td>Shopify app embed block containing <code>wetracked</code></td></tr>
+  <tr><td>WooCommerce plugin</td><td><code>wetracked_woo_plugin</code></td><td><code>wt-for-woocommerce</code> in HTML</td></tr>
+</table>
+
 <h3>Limitations</h3>
 <ul class="signals">
   <li>Only the initial HTML is analyzed &mdash; scripts loaded dynamically via tag managers (e.g. Google Tag Manager) at runtime won't be detected.</li>
@@ -190,7 +207,7 @@ HTML = """<!DOCTYPE html>
   <li>Add an <strong>HTTP API</strong> enrichment column</li>
   <li>Set method to <strong>GET</strong></li>
   <li>Set the URL to: <code>https://klaviyo-detect.vercel.app/api/detect?domain={{domain_column}}</code></li>
-  <li>Map <code>uses_klaviyo</code>, <code>uses_littledata</code>, <code>uses_elevar</code>, and <code>uses_shopify</code> to your output columns</li>
+  <li>Map <code>uses_klaviyo</code>, <code>uses_littledata</code>, <code>uses_elevar</code>, <code>uses_shopify</code>, and <code>uses_wetracked</code> to your output columns</li>
 </ol>
 
 <h2>Try It</h2>
@@ -255,6 +272,7 @@ HTML = """<!DOCTYPE html>
         if (data.uses_littledata) detected.push('Littledata');
         if (data.uses_elevar) detected.push('Elevar');
         if (data.uses_shopify) detected.push('Shopify');
+        if (data.uses_wetracked) detected.push('wetracked.io');
         if (detected.length > 0) {
           badge.textContent = 'Detected: ' + detected.join(', ');
           badge.className = 'result-badge yes';
@@ -269,7 +287,8 @@ HTML = """<!DOCTYPE html>
         data.signals_matched || [],
         data.littledata_signals || [],
         data.elevar_signals || [],
-        data.shopify_signals || []
+        data.shopify_signals || [],
+        data.wetracked_signals || []
       );
       if (allSignals.length > 0) {
         signalsBox.className = 'result-signals visible';
