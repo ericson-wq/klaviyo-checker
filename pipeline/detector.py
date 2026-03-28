@@ -1,4 +1,4 @@
-"""E-commerce technology detection — Klaviyo, Littledata, and Elevar."""
+"""E-commerce technology detection — Klaviyo, Littledata, Elevar, and wetracked.io."""
 
 from __future__ import annotations
 
@@ -205,6 +205,75 @@ def detect_elevar(html: str) -> dict:
             if "getelevar.com" in text.lower():
                 signals.append({"type": "elevar_domain", "detail": "getelevar.com reference found"})
                 break
+
+    return {
+        "detected": len(signals) > 0,
+        "signals": signals,
+    }
+
+
+def detect_wetracked(html: str) -> dict:
+    """
+    Check HTML for wetracked.io signals.
+
+    Returns:
+        {
+            "detected": bool,
+            "signals": [{"type": str, "detail": str}, ...],
+        }
+
+    6 signals:
+      1. wetracked_pixel_script  — pixel.wetracked.io in <script src>
+      2. wetracked_script        — other "wetracked.io" in <script src>
+      3. wetracked_inline_ref    — wetracked.io in inline <script>
+      4. wetracked_wt_options    — wt:options variable in inline <script>
+      5. wetracked_app_embed     — Shopify app embed block containing wetracked
+      6. wetracked_woo_plugin    — wt-for-woocommerce in HTML
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    signals = []
+
+    # 1: Script src containing pixel.wetracked.io
+    for script in soup.find_all("script", src=True):
+        src = script["src"]
+        if "pixel.wetracked.io" in src.lower():
+            signals.append({"type": "wetracked_pixel_script", "detail": src})
+
+    # 2: Script src containing wetracked.io (other CDN variants)
+    for script in soup.find_all("script", src=True):
+        src = script["src"]
+        if "wetracked.io" in src.lower() and "pixel.wetracked.io" not in src.lower():
+            signals.append({"type": "wetracked_script", "detail": src})
+
+    # 3: wetracked.io references in inline scripts
+    for script in soup.find_all("script", src=False):
+        text = script.string or ""
+        if "wetracked.io" in text.lower():
+            signals.append({"type": "wetracked_inline_ref", "detail": "wetracked.io reference found"})
+            break
+
+    # 4: wt:options variable in inline scripts
+    for script in soup.find_all("script", src=False):
+        text = script.string or ""
+        if "wt:options" in text:
+            signals.append({"type": "wetracked_wt_options", "detail": "wt:options reference found"})
+            break
+
+    # 5: Shopify app embed block containing wetracked
+    for comment in soup.find_all(string=lambda t: isinstance(t, str) and "wetracked" in t.lower()):
+        parent = comment.parent
+        if parent and parent.name and parent.get("id", ""):
+            if "app-embed" in parent.get("id", "").lower() or "app-block" in parent.get("id", "").lower():
+                signals.append({"type": "wetracked_app_embed", "detail": f"Shopify app embed: {parent.get('id', '')}"})
+                break
+    if not any(s["type"] == "wetracked_app_embed" for s in signals):
+        for el in soup.find_all(attrs={"data-app": re.compile(r"wetracked", re.IGNORECASE)}):
+            signals.append({"type": "wetracked_app_embed", "detail": f"data-app attribute: {el.get('data-app', '')}"})
+            break
+
+    # 6: wt-for-woocommerce plugin reference in HTML
+    if "wt-for-woocommerce" in html.lower():
+        signals.append({"type": "wetracked_woo_plugin", "detail": "wt-for-woocommerce plugin detected"})
 
     return {
         "detected": len(signals) > 0,
